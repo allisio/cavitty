@@ -1,0 +1,36 @@
+#!/usr/bin/env ruby
+require 'cavitty/options'
+
+# Apply the remarkably simple ECA state transition.
+def iterate rule, seed
+  "00#{seed}00".chars.each_cons(3).map { |c| rule[c.join.to_i 2] }.join
+end
+
+class String
+  def center_fit n
+    n < size ? self[(size - n) / 2, n] : center(n)
+  end
+end
+
+conf = parse ARGV, {rule: 110, seed: '1', fps: 30}
+term = [*1..7].zip([*9..15]).flatten.cycle
+
+# Reset the visualization on font/window size change.
+trap('SIGWINCH') do
+  print `clear`
+  cols = `tput cols`.to_i # Get width of the terminal for centering.
+  $world = Enumerator.new { |y|
+    y << (s = conf[:seed]).center_fit(cols)
+    loop { y << (s = iterate conf[:rule].to_i, s).center_fit(cols) }
+  }.each_slice 2
+end
+Process.kill 'SIGWINCH', $$ # Immediately "reset" to get our initial world.
+
+trap('INT') { exit }
+while sleep 1 / conf[:fps].to_f
+  a, b = $world.next
+  # We actually print two generations at a time for aesthetic reasons.
+  # This is facilitated by the ▄, ▀, and █ box drawing characters.
+  rows = a.size.times.map { |i| ' ▄▀█'[(a[i] + b[i]).to_i 2] }.join
+  print "\e[38;5;#{term.next}m", rows, "\e[0m"
+end
